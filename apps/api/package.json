@@ -1,0 +1,5 @@
+{
+  "name": "@flowdesk/api",
+  "private": true,
+  "type": "module"
+}
