@@ -107,16 +107,17 @@ PostgreSQL owns business state. Redis transports work. The API, dispatcher, and 
 
 The first reliable vertical path is: authenticated request -> validated workflow version -> durable run -> repeatable response for duplicate submissions. Async execution follows after this path is verified.
 
-## Current checkpoint: lesson 2 complete
+## Current checkpoint: lesson 3 complete
 
-The npm workspace is configured. The project-local Node.js 24.22.1 runtime and its bundled npm 11.19.1 are downloaded and verified. There is no server, database, installed application dependency, or generated lockfile yet.
+The npm workspace and project-local Node.js baseline are verified. TypeScript development tools are installed with exact versions and a generated lockfile. There is no server, database, TypeScript configuration, or application entry point yet.
 
 ```text
 flowdesk/
   README.md              learning plan and checkpoints
-  package.json           private workspace root
+  package.json           private workspace root and shared development tools
+  package-lock.json      npm-generated exact dependency tree
   .nvmrc                 exact Node.js version for compatible version managers
-  .gitignore             excludes local downloaded tools from future Git tracking
+  .gitignore             excludes downloaded tools and installed packages
   apps/
     api/
       package.json       private API package, using ES modules
@@ -124,7 +125,7 @@ flowdesk/
 
 `apps/*` will discover runnable application packages. `packages/*` reserves a convention for reusable packages such as the future SDK; that directory is created only when needed.
 
-From this directory, inspect the configuration without installing anything:
+From this directory, inspect the workspace configuration:
 
 ```powershell
 npm pkg get name private workspaces
@@ -190,9 +191,98 @@ Prediction exercise: does Node 25.0.0 satisfy `>=24.22.1 <25`? No: it fails the 
 
 Plain-language recap: we chose the program version that will run FlowDesk and wrote the choice down so other machines can follow it. We have not started writing the API yet.
 
+## Lesson 3: TypeScript development tools
+
+We installed three tools at the workspace root, where future application packages can share them. Installing a tool is separate from configuring it and writing code that uses it.
+
+| Package | Exact version | Purpose |
+| --- | --- | --- |
+| typescript | 7.0.2 | Provides tsc, which checks types and can compile TypeScript into JavaScript |
+| tsx | 4.23.15 | Runs TypeScript during development without a separate manual build |
+| @types/node | 24.19.2 | Describes Node's built-in APIs so TypeScript can check their usage |
+
+Node.js remains 24.22.1; its bundled npm remains 11.19.1. Type definitions have their own patch numbers, so @types/node does not need the same complete version number as Node. We deliberately selected the Node 24 definitions.
+
+After selecting the local runtime as shown in lesson 2, the installation command was:
+
+```powershell
+npm.cmd install --save-dev --save-exact typescript@7.0.2 tsx@4.23.15 '@types/node@24.19.2'
+```
+
+- `install` downloads packages and updates the package files.
+- `--save-dev` places them in `devDependencies`: tools used while developing, checking, or building the application.
+- `--save-exact` records the selected versions without an update range such as `^7.0.2`.
+- `package@version` selects a particular package release.
+
+A future runtime library such as Express belongs in `dependencies`, because the deployed API will import it while serving requests. A production build step may still need development dependencies before emitting JavaScript; omitting them too early would prevent compilation. Our development runner is not yet a production startup design.
+
+The root manifest now has this new section:
+
+```json
+"devDependencies": {
+  "@types/node": "24.19.2",
+  "tsx": "4.23.15",
+  "typescript": "7.0.2"
+}
+```
+
+TypeScript example used only for a tool check:
+
+```typescript
+const project: string = 'FlowDesk';
+console.log(project);
+```
+
+`const` declares a binding we will not reassign. `project` is its name. `: string` tells the type checker to expect text. `'FlowDesk'` is the text value. `console.log(project)` prints that value. The tool check printed `FlowDesk`; this example is not saved as application code.
+
+Development execution: invoke tsx -> its transformer prepares JavaScript -> Node executes it. Type checking is separate: tsc examines the source and its type descriptions. tsx does not type-check. A value of the wrong type can still run, so a later type-check command will be part of our required checks.
+
+Node 24 can also run supported TypeScript syntax through built-in type stripping. That does not perform type checking or read tsconfig.json. We selected tsx for our explicit development workflow and will use tsc for checking and production compilation.
+
+### What npm generated
+
+- `node_modules/` contains the installed tools and their dependencies. Git ignores it; another machine installs packages again rather than receiving this directory in a commit.
+- `package-lock.json` records the exact resolved dependency tree. Commit it. Even when our three direct dependencies are pinned, their own dependencies also need recorded versions.
+- The lockfile's `version` fields identify package releases, `resolved` fields identify download locations, and `integrity` fields let npm verify downloaded package contents. `dev` marks development-only dependency paths. `optional`, `os`, and `cpu` describe dependencies selected for particular platforms. Workspace entries connect local packages.
+- The generated lockfile includes repeated platform records used by esbuild, tsx's transformer. These are package-manager data, not hundreds of lines of hand-written application logic. Let npm maintain them.
+
+After cloning on another machine with a suitable Node installation, use `npm ci` to install from the committed lockfile. It requires package.json and the lockfile to agree and replaces the installed dependency directory. Use `npm install` when deliberately adding or changing dependencies.
+
+### Verification and references
+
+Verified the dependency tree with `npm ls --depth=0`; tsc reported 7.0.2; tsx reported 4.23.15 on Node 24.22.1; tsx executed the example and printed `FlowDesk`. Git confirmed that both `.tools/` and `node_modules/` are ignored. No application type-check or server test is claimed because those do not exist yet.
+
+The restricted execution environment blocked esbuild's subprocess; rerunning the same execution check with approved permissions succeeded. No dependency change was needed for that environment restriction.
+
+- [TypeScript project installation](https://www.typescriptlang.org/download/)
+- [tsx: type checking is separate from execution](https://tsx.hirok.io/typescript)
+- [npm lockfile purpose](https://docs.npmjs.com/cli/v11/configuring-npm/package-lock-json/)
+- Exact releases and Node engine compatibility were checked against the npm registry before installation.
+
+Interview practice:
+
+- **Does running TypeScript with tsx prove it has no type errors?** No. tsx executes transformed code; tsc checks types separately. Neither proves the business logic is correct.
+- **Why commit a lockfile if direct dependency versions are exact?** Dependencies have their own dependencies. The lockfile records those resolved versions too.
+- **Why omit node_modules from Git?** It is generated, can contain platform-specific files, and can be recreated from the package manifests and lockfile.
+
+Prediction exercise: if a package is installed successfully, does that prove our API starts? No. We still need configuration, application code, and an actual startup check.
+
+Plain-language recap: we installed tools that help us write and run TypeScript, saved the exact package choices, and kept downloaded files out of source control. Next we will configure TypeScript and introduce our first tiny application file.
+
+## GitHub workflow
+
+Repository: [yashpatel1797/flowdesk](https://github.com/yashpatel1797/flowdesk).
+
+The local repository already contained an initial commit and an origin remote when lesson 3 began. The configured GitHub remote was reachable; we reused it and preserved that history.
+
+Think of Git as local project history and GitHub as a remote copy of that history. `origin` is the local nickname for the remote URL. `main` is our branch: the current line of project history.
+
+For each completed lesson: inspect the changes -> stage the intended files with `git add` -> save a local snapshot with `git commit` -> upload committed history with `git push`. A commit alone does not upload anything. Keep the generated lockfile in commits; keep `.tools/` and `node_modules/` ignored. Inspect `git status` before committing.
+
 ## Session log
 
 | Session | Lesson | Focused study time | Questions / follow-up |
 | --- | --- | --- | --- |
 | 1 | Workspace boundary and roadmap | Learner to record | Next: Node.js baseline |
 | 2 | Runtime baseline and local tool setup | Learner to record | Next: TypeScript development tools |
+| 3 | Pinned TypeScript tools, lockfile, and GitHub workflow | Learner to record | Next: TypeScript configuration and first entry point |
